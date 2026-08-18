@@ -35,7 +35,7 @@
 </head>
 <body>
 <div id="wrap">
-  <canvas id="c" width="672" height="528"></canvas>
+  <canvas id="c" width="672" height="536"></canvas>
   <div id="hint">ARROWS / WASD move &nbsp;&middot;&nbsp; ENTER start / continue &nbsp;&middot;&nbsp; P pause &nbsp;&middot;&nbsp; M mute</div>
 </div>
 <script>
@@ -43,9 +43,11 @@
 "use strict";
 
 /* ============================================================
-   ESKIMO EDDIE - a from-scratch homage to the 1984 8-bit
-   "two games in one" arctic arcade classic. All graphics
-   below are original pixel art drawn procedurally on canvas.
+   ESKIMO EDDIE - a from-scratch homage to the 1984 Ocean Software
+   "two games in one" arctic arcade classic. All graphics below
+   are original pixel art / vector shapes drawn procedurally on
+   canvas, redrawn from reference screenshots of the real game
+   (black arenas, HUD layout, maze block/border look, cast art).
    ============================================================ */
 
 const canvas = document.getElementById('c');
@@ -65,14 +67,13 @@ const PAL = {
   'c': '#00d7d7', // cyan
   'o': '#ff8800', // orange (Percy's beak/feet)
   'r': '#d70000', // red (Growler's mouth)
-  'Y': '#ffff00', // bright yellow (electrified wire)
 };
 
 const PX = 3;      // display pixels per sprite pixel
 const TILE = 16 * PX; // tile size on screen (48)
 const COLS = 14;
 const ROWS = 10;
-const HUD_H = TILE;
+const HUD_H = 56;
 canvas.width = COLS * TILE;
 canvas.height = ROWS * TILE + HUD_H;
 
@@ -91,11 +92,27 @@ function drawSprite(rows, dx, dy, mirror){
     }
   }
 }
+function buildTile(painter){
+  const rows = [];
+  for (let r=0;r<16;r++){
+    let row = '';
+    for (let c=0;c<16;c++) row += painter(r,c);
+    rows.push(row);
+  }
+  return rows;
+}
+function roundRectPath(x,y,w,h,r){
+  ctx.beginPath();
+  ctx.moveTo(x+r,y);
+  ctx.arcTo(x+w,y,x+w,y+h,r);
+  ctx.arcTo(x+w,y+h,x,y+h,r);
+  ctx.arcTo(x,y+h,x,y,r);
+  ctx.arcTo(x,y,x+w,y,r);
+  ctx.closePath();
+}
 
 // ---------- sprite data (16x16 pixel grids) ----------
-// Eddie: a flat white fur hood over a flat blue parka, black boots -
-// two solid inks plus outline, in the chunky-silhouette style of
-// mid-80s Spectrum arcade sprites (Miner Willy, Monty Mole, etc).
+// Eddie: a flat white fur hood over a flat blue parka, black boots.
 const EDDIE_DOWN = [
 "................",
 "....wwwwwwww....",
@@ -152,110 +169,22 @@ const PERCY = [
 "................",
 ];
 
-// Growler - a flat white sea-bear head, snarling, swimming across the water
-const GROWLER = [
-"................",
-"................",
-"....wwwwwwww....",
-"...wwwwwwwwww...",
-"..wwwkwwwwkwww..",
-"..wwwrrrrrrwww..",
-"..wwwkkkkkkwww..",
-"...wwwwwwwwww...",
-"....wwwwwwww....",
-"....cccccccc....",
-"...cccccccccc...",
-"................",
-"................",
-"................",
-"................",
-"................",
-];
-
-// Snowbug - small flat maze pest, chunky insect silhouette
-const SNOWBUG = [
-"................",
-"................",
-"......cccc......",
-".....cccccc.....",
-"....ccckkccc....",
-"....cccccccc....",
-"....c.cccc.c....",
-"...c..cccc..c...",
-"..c...cccc...c..",
-"......c..c......",
-".....c....c.....",
-"................",
-"................",
-"................",
-"................",
-"................",
-];
-
-// Built procedurally (not hand-typed) so every row is guaranteed 16 wide -
-// a faceted ice cube for pushable blocks, and a distinct electrified
-// fence for the maze border, instead of two near-identical nested squares.
-function buildTile(painter){
-  const rows = [];
-  for (let r=0;r<16;r++){
-    let row = '';
-    for (let c=0;c<16;c++) row += painter(r,c);
-    rows.push(row);
+// Growler - a full white bear body, side-on, walking the black arena
+// (built from simple ellipse/circle maths so it's always well-formed).
+const GROWLER = buildTile((r,c)=>{
+  const bx=(c-7)/6, by=(r-9)/3;
+  if (bx*bx+by*by<=1) return 'w'; // body
+  const hx=(c-12)/3, hy=(r-6)/3;
+  if (hx*hx+hy*hy<=1){
+    if (r===5 && (c===11||c===12)) return 'k'; // eye
+    if (r===7 && c>=12 && c<=14) return 'r';   // mouth
+    return 'w'; // head
   }
-  return rows;
-}
-const ICE_BLOCK = buildTile((r,c)=>{
-  if (r===0||r===15||c===0||c===15) return 'W';
-  if (r===c || r===15-c) return 'w';
-  return 'c';
-});
-const ICE_BLOCK_CRACK = buildTile((r,c)=>{
-  if (r===0||r===15||c===0||c===15) return 'W';
-  if (Math.abs(r-c)<=1 || Math.abs(r+c-15)<=1) return 'k';
-  return 'c';
-});
-const WALL = buildTile((r,c)=>{
-  if (c<=1 || c>=14) return 'k';
-  if (r===4 || r===11) return 'Y';
-  if (r>5 && r<10 && (r+c)%3===0) return 'Y';
-  return 'b';
+  if ((r===12||r===13) && (c===4||c===5||c===9||c===10)) return 'w'; // legs
+  return '.';
 });
 
-function tileWater(dx,dy,phase){
-  ctx.fillStyle = '#0000d7';
-  ctx.fillRect(dx,dy,TILE,TILE);
-  ctx.fillStyle = '#0000ff';
-  for(let i=0;i<3;i++){
-    const yy = dy + ((i*5 + phase) % 16)*PX;
-    ctx.fillRect(dx, yy, TILE, PX);
-  }
-}
-function tileFloe(dx,dy){
-  ctx.fillStyle = '#00d7d7';
-  ctx.fillRect(dx,dy,TILE,TILE);
-  ctx.strokeStyle = '#0000d7';
-  ctx.lineWidth = 2;
-  ctx.strokeRect(dx+1,dy+1,TILE-2,TILE-2);
-}
-function tileHole(dx,dy){
-  tileFloe(dx,dy);
-  ctx.fillStyle = '#000000';
-  ctx.beginPath();
-  ctx.moveTo(dx+TILE*0.5, dy+TILE*0.08);
-  ctx.lineTo(dx+TILE*0.85, dy+TILE*0.35);
-  ctx.lineTo(dx+TILE*0.7, dy+TILE*0.9);
-  ctx.lineTo(dx+TILE*0.3, dy+TILE*0.85);
-  ctx.lineTo(dx+TILE*0.15, dy+TILE*0.3);
-  ctx.closePath();
-  ctx.fill();
-}
-function tileBase(dx,dy){
-  ctx.fillStyle = '#d7d700';
-  ctx.fillRect(dx,dy,TILE,TILE);
-  ctx.strokeStyle = '#000000';
-  ctx.lineWidth = 1;
-  ctx.strokeRect(dx+0.5,dy+0.5,TILE-1,TILE-1);
-}
+function pad(n, width){ return String(Math.max(0,Math.floor(n))).padStart(width,'0'); }
 
 // ---------- audio (simple beeper-style FX) ----------
 let audioCtx = null, muted = false;
@@ -275,7 +204,6 @@ function beep(freq, dur, type, vol){
   }catch(e){}
 }
 const SFX = {
-  step:   ()=>beep(180,0.03,'square',0.03),
   pickup: ()=>{beep(660,0.08,'square');beep(880,0.12,'square');},
   score:  ()=>{beep(520,0.06);beep(780,0.10);},
   hurt:   ()=>{beep(120,0.25,'sawtooth',0.12);},
@@ -292,6 +220,7 @@ window.addEventListener('keydown', e=>{
   keys[e.code] = true;
   if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(e.code)) e.preventDefault();
   if (e.code === 'KeyM'){ muted = !muted; }
+  if (e.code === 'KeyP' && (STATE==='g1'||STATE==='g2')) paused = !paused;
   handleMenuKey(e.code);
 });
 window.addEventListener('keyup', e=>{ keys[e.code] = false; });
@@ -308,7 +237,6 @@ let STATE = 'title'; // title, g1, g1clear, g2, g2clear, gameover
 let lives = 3, score = 0, round = 1, highscore = 0;
 try{ highscore = parseInt(localStorage.getItem('eskimoEddieHi')||'0',10)||0; }catch(e){}
 let paused = false;
-let msgTimer = 0;
 
 function handleMenuKey(code){
   if (code !== 'Enter' && code !== 'NumpadEnter') return;
@@ -317,9 +245,6 @@ function handleMenuKey(code){
   else if (STATE === 'g2clear'){ round++; STATE='g1'; initGame1(); }
   else if (STATE === 'gameover'){ STATE='title'; }
 }
-window.addEventListener('keydown', e=>{
-  if (e.code === 'KeyP' && (STATE==='g1'||STATE==='g2')) paused = !paused;
-});
 
 function startGame(){
   lives = 3; score = 0; round = 1;
@@ -329,32 +254,36 @@ function startGame(){
 }
 
 // ================= GAME 1 : RESCUE PERCY =================
+const G1_TIME = 40;
 let g1;
 function initGame1(){
-  const speedBoost = (round-1)*0.4;
+  const speedBoost = (round-1)*0.25;
   g1 = {
-    eddie: { tx:6, ty:9, px:0, py:0, moving:false, dir:'down', carrying:false, moveT:0 },
+    eddie: { tx:6, ty:9, px:0, py:0, moving:false, dir:'down', carrying:false },
     percyTx: 6, percyTy:0, percyVisible:true,
     holes: [],
     growlers: [],
     rescues: 0,
     needed: 3,
     hurtCooldown: 0,
-    stepTimer:0,
+    timeLeft: G1_TIME,
   };
   g1.eddie.px = g1.eddie.tx*TILE; g1.eddie.py = g1.eddie.ty*TILE + HUD_H;
-  const holeCount = 4 + Math.min(round-1, 3);
+  const holeCount = 3 + Math.min(round-1, 4);
   for (let i=0;i<holeCount;i++){
-    g1.holes.push({ x: 1+Math.floor(Math.random()*(COLS-2)), y: 2+Math.floor(Math.random()*6), t: Math.random()*Math.PI*2, dir: Math.random()<0.5?1:-1 });
+    g1.holes.push({ x: 1+Math.random()*(COLS-2), y: 2+Math.random()*6, t: Math.random()*Math.PI*2, vx:(Math.random()-0.5)*0.6, vy:(Math.random()-0.5)*0.4 });
   }
-  g1.growlers.push({ y:2, x: 0, speed: 0.03+speedBoost*0.01, dir:1 });
-  g1.growlers.push({ y:5, x: COLS-1, speed: 0.035+speedBoost*0.01, dir:-1 });
+  const growlerCount = 2 + Math.min(round-1, 2);
+  for (let i=0;i<growlerCount;i++){
+    g1.growlers.push({ y: 2+Math.floor(Math.random()*6), x: Math.random()*(COLS-2)+1, speed: 1.1+speedBoost+Math.random()*0.4, dir: Math.random()<0.5?1:-1, rowTimer: 3+Math.random()*3 });
+  }
   placePercy();
 }
 function placePercy(){
   g1.percyTx = 1 + Math.floor(Math.random()*(COLS-2));
   g1.percyTy = 0;
   g1.percyVisible = true;
+  g1.timeLeft = G1_TIME;
 }
 function resetEddie1(){
   g1.eddie.tx = 6; g1.eddie.ty = 9;
@@ -375,8 +304,9 @@ function loseLife(){
 }
 function updateGame1(dt){
   if (g1.hurtCooldown > 0){ g1.hurtCooldown -= dt; return; }
+  g1.timeLeft -= dt;
+  if (g1.timeLeft <= 0){ hitHazard1(); return; }
   const e = g1.eddie;
-  // movement
   if (!e.moving){
     const d = dirHeld();
     if (d){
@@ -395,21 +325,22 @@ function updateGame1(dt){
       onEddieArrive1();
     }
   }
-  // holes drift
+  // holes drift freely around the arena, bouncing off the walls
   for (const h of g1.holes){
-    h.t += dt*0.6;
-    if (Math.random() < dt*0.15){
-      const nx = h.x + (Math.random()<0.5?-1:1);
-      if (nx>=1 && nx<COLS-1) h.x = nx;
-      const ny = h.y + (Math.random()<0.5?-1:1);
-      if (ny>=2 && ny<=7) h.y = ny;
-    }
+    h.t += dt*1.5;
+    h.x += h.vx*dt; h.y += h.vy*dt;
+    if (h.x<0.5||h.x>COLS-1.5) h.vx *= -1;
+    if (h.y<1.5||h.y>7.5) h.vy *= -1;
+    h.x = Math.max(0.5, Math.min(COLS-1.5, h.x));
+    h.y = Math.max(1.5, Math.min(7.5, h.y));
   }
-  // growlers swim
+  // growlers pace back and forth, occasionally switching lanes
   for (const gr of g1.growlers){
-    gr.x += gr.dir * gr.speed * dt * 60;
-    if (gr.x > COLS+0.5){ gr.x = -1.5; }
-    if (gr.x < -1.5){ gr.x = COLS+0.5; }
+    gr.x += gr.dir*gr.speed*dt;
+    if (gr.x < 0.5){ gr.x = 0.5; gr.dir = 1; }
+    if (gr.x > COLS-1.5){ gr.x = COLS-1.5; gr.dir = -1; }
+    gr.rowTimer -= dt;
+    if (gr.rowTimer <= 0){ gr.rowTimer = 3+Math.random()*3; gr.y = 2+Math.floor(Math.random()*6); }
   }
   checkHazards1();
 }
@@ -420,7 +351,6 @@ function onEddieArrive1(){
     g1.percyVisible = false;
     SFX.pickup();
   } else if (e.carrying && e.ty === 9){
-    // delivered
     e.carrying = false;
     g1.rescues++;
     score += 100;
@@ -437,14 +367,10 @@ function checkHazards1(){
   const e = g1.eddie;
   if (e.moving) return;
   for (const h of g1.holes){
-    if (Math.round(h.x)===e.tx && Math.round(h.y)===e.ty){
-      hitHazard1(); return;
-    }
+    if (Math.round(h.x)===e.tx && Math.round(h.y)===e.ty){ hitHazard1(); return; }
   }
   for (const gr of g1.growlers){
-    if (Math.round(gr.x)===e.tx && gr.y===e.ty){
-      hitHazard1(); return;
-    }
+    if (Math.round(gr.x)===e.tx && gr.y===e.ty){ hitHazard1(); return; }
   }
 }
 function hitHazard1(){
@@ -452,18 +378,28 @@ function hitHazard1(){
   g1.hurtCooldown = 1.0;
   if (loseLife()) resetEddie1();
 }
-function drawGame1(){
-  // background
-  for (let ty=0; ty<ROWS; ty++){
-    for (let tx=0; tx<COLS; tx++){
-      const dx = tx*TILE, dy = ty*TILE+HUD_H;
-      if (ty<2) tileWater(dx,dy, Math.floor(performance.now()/120)+tx*3);
-      else if (ty===9) tileBase(dx,dy);
-      else tileFloe(dx,dy);
-    }
+function drawHoleHazard(cx,cy,r,rot){
+  const spikes = 7;
+  ctx.strokeStyle = '#00ffff';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  for (let i=0;i<=spikes*2;i++){
+    const rad = (i%2===0) ? r : r*0.45;
+    const ang = rot + i*Math.PI/spikes;
+    const x = cx+Math.cos(ang)*rad, y = cy+Math.sin(ang)*rad;
+    if (i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
   }
+  ctx.closePath();
+  ctx.stroke();
+}
+function drawGame1(){
+  ctx.fillStyle = '#000000';
+  ctx.fillRect(0, HUD_H, canvas.width, ROWS*TILE);
+  ctx.strokeStyle = '#ffffff';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(1, HUD_H+1, canvas.width-2, ROWS*TILE-2);
   for (const h of g1.holes){
-    tileHole(Math.round(h.x)*TILE, Math.round(h.y)*TILE+HUD_H);
+    drawHoleHazard(h.x*TILE+TILE/2, h.y*TILE+HUD_H+TILE/2, TILE*0.32, h.t);
   }
   if (g1.percyVisible){
     drawSprite(PERCY, g1.percyTx*TILE, g1.percyTy*TILE+HUD_H, false);
@@ -477,10 +413,11 @@ function drawGame1(){
     drawSprite(e.dir==='up'?EDDIE_UP:EDDIE_DOWN, e.px, e.py, e.dir==='left');
     if (e.carrying) drawSprite(PERCY, e.px, e.py - TILE*0.55, false);
   }
-  drawHud('GAME 1: RESCUE PERCY', `RESCUES ${g1.rescues}/${g1.needed}`);
+  drawHud(g1.timeLeft/G1_TIME);
 }
 
 // ================= GAME 2 : ICE MAZE =================
+const G2_TIME = 90;
 let g2;
 function initGame2(){
   const grid = [];
@@ -492,12 +429,12 @@ function initGame2(){
     }
     grid.push(row);
   }
-  // clear a starting pocket
   const clearCells = [[1,1],[2,1],[1,2]];
   for (const [x,y] of clearCells) grid[y][x] = 'empty';
   const enemyCount = Math.min(4 + (round-1), 7); // the original spawns four Snowbugs
   const bugs = [];
-  const spawns = [[COLS-2,ROWS-2],[COLS-2,1],[1,ROWS-2],[COLS-2,Math.floor(ROWS/2)],[Math.floor(COLS/2),1],[Math.floor(COLS/2),ROWS-2],[1,Math.floor(ROWS/2)]];
+  // kept one cell clear of the border so bugs don't spawn already dazed
+  const spawns = [[2,2],[COLS-3,2],[2,ROWS-3],[COLS-3,ROWS-3],[Math.floor(COLS/2),2],[Math.floor(COLS/2),ROWS-3],[2,Math.floor(ROWS/2)]];
   for (let i=0;i<enemyCount;i++){
     const [sx,sy] = spawns[i % spawns.length];
     grid[sy][sx] = 'empty';
@@ -505,10 +442,10 @@ function initGame2(){
   }
   g2 = {
     grid,
-    eddie: { tx:1, ty:1, px:TILE, py:TILE+HUD_H, moving:false, dir:'down' },
+    eddie: { tx:1, ty:1, px:TILE, py:TILE+HUD_H, moving:false, dir:'down', pushCooldown:0 },
     bugs,
     hurtCooldown: 0,
-    bugTimer: 0,
+    timeLeft: G2_TIME,
   };
 }
 function cellAt(x,y){
@@ -518,31 +455,45 @@ function cellAt(x,y){
 function updateGame2(dt){
   if (g2.hurtCooldown > 0){ g2.hurtCooldown -= dt; }
   const e = g2.eddie;
+  g2.timeLeft -= dt;
+  if (g2.timeLeft <= 0 && g2.hurtCooldown<=0){
+    g2.hurtCooldown = 1.0;
+    if (loseLife()){
+      e.tx=1; e.ty=1; e.px=TILE; e.py=TILE+HUD_H; e.moving=false;
+      g2.timeLeft = G2_TIME;
+    }
+    return;
+  }
+  if (e.pushCooldown > 0) e.pushCooldown -= dt;
   if (!e.moving){
     const d = dirHeld();
     if (d){
       const nx = e.tx+d.x, ny = e.ty+d.y;
       const cell = cellAt(nx,ny);
       let canMove = false;
-      if (cell === 'empty' || cell === 'crack'){
+      if (cell === 'empty'){
         canMove = true;
-      } else if (cell === 'block'){
+      } else if ((cell === 'block' || cell === 'crack') && e.pushCooldown <= 0){
+        // both a fresh block and an already-cracked one are still solid -
+        // they must be pushed, not walked through. A held key would otherwise
+        // re-attempt this every frame, so a short cooldown paces each push.
+        e.pushCooldown = 0.3;
         const bx = nx+d.x, by = ny+d.y;
         const beyond = cellAt(bx,by);
         const bugHere = g2.bugs.find(b=>!b.dead && b.tx===bx && b.ty===by);
-        if (beyond === 'empty' || beyond === 'crack'){
+        if (beyond === 'empty'){
           if (bugHere){
             bugHere.dead = true; score += 75; SFX.crush();
             g2.grid[ny][nx] = 'empty';
           } else {
-            g2.grid[by][bx] = 'block';
+            g2.grid[by][bx] = cell; // slide it forward, keeping its cracked state
             g2.grid[ny][nx] = 'empty';
           }
           SFX.push();
           canMove = true;
         } else {
-          // pushing into a wall/other block: crack it, then break
-          if (g2.grid[ny][nx] === 'block'){ g2.grid[ny][nx] = 'crack'; score += 5; }
+          // pushing into a solid obstruction: crack it, or melt an already-cracked one away
+          if (cell === 'block'){ g2.grid[ny][nx] = 'crack'; score += 5; }
           else { g2.grid[ny][nx] = 'empty'; score += 20; }
         }
       }
@@ -583,7 +534,7 @@ function updateGame2(dt){
         for (const o of options){
           const nx = b.tx+o.x, ny = b.ty+o.y;
           const cell = cellAt(nx,ny);
-          if (cell==='empty' || cell==='crack'){
+          if (cell==='empty'){
             b.tx=nx; b.ty=ny; b.moving=true;
             b.dir = o.y<0?'up':o.y>0?'down':(o.x<0?'left':'right');
             break;
@@ -604,6 +555,7 @@ function updateGame2(dt){
         g2.hurtCooldown = 1.0;
         if (loseLife()){
           e.tx=1; e.ty=1; e.px=TILE; e.py=TILE+HUD_H; e.moving=false;
+          g2.timeLeft = G2_TIME;
         }
       }
     }
@@ -614,74 +566,92 @@ function updateGame2(dt){
     SFX.clear();
   }
 }
+function tileDither(dx,dy){
+  for (let ry=0;ry<16;ry++){
+    for (let rx=0;rx<16;rx++){
+      ctx.fillStyle = ((rx+ry)%2===0) ? '#00d7d7' : '#007a7a';
+      ctx.fillRect(dx+rx*PX, dy+ry*PX, PX, PX);
+    }
+  }
+}
+function drawIceBlock(dx,dy,cracked){
+  const m = TILE*0.1, s = TILE-2*m;
+  ctx.fillStyle = '#ffffff';
+  roundRectPath(dx+m,dy+m,s,s,s*0.28);
+  ctx.fill();
+  ctx.lineWidth = TILE*0.05;
+  ctx.strokeStyle = '#000000';
+  ctx.beginPath();
+  ctx.arc(dx+TILE*0.62, dy+TILE*0.5, TILE*0.22, Math.PI*0.15, Math.PI*1.05);
+  ctx.stroke();
+  if (cracked){
+    ctx.beginPath();
+    ctx.moveTo(dx+TILE*0.32, dy+TILE*0.28);
+    ctx.lineTo(dx+TILE*0.5, dy+TILE*0.72);
+    ctx.stroke();
+  }
+}
+function drawSnowbug(cx,cy,r,dazed){
+  const bright = dazed && Math.floor(performance.now()/100)%2===0;
+  ctx.fillStyle = bright ? '#ffffff' : '#ffff00';
+  ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle = '#000000';
+  ctx.beginPath(); ctx.arc(cx-r*0.35,cy-r*0.05,r*0.16,0,Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(cx+r*0.35,cy-r*0.05,r*0.16,0,Math.PI*2); ctx.fill();
+}
 function drawGame2(){
   for (let y=0;y<ROWS;y++){
     for (let x=0;x<COLS;x++){
       const dx=x*TILE, dy=y*TILE+HUD_H;
       const cell = g2.grid[y][x];
-      if (cell==='wall') drawSprite(WALL, dx, dy, false);
-      else {
-        ctx.fillStyle = '#000030';
+      if (cell==='wall'){
+        tileDither(dx,dy);
+      } else {
+        ctx.fillStyle = '#000000';
         ctx.fillRect(dx,dy,TILE,TILE);
-        if (cell==='block') drawSprite(ICE_BLOCK, dx, dy, false);
-        else if (cell==='crack') drawSprite(ICE_BLOCK_CRACK, dx, dy, false);
+        if (cell==='block') drawIceBlock(dx,dy,false);
+        else if (cell==='crack') drawIceBlock(dx,dy,true);
       }
     }
   }
   for (const b of g2.bugs){
     if (b.dead) continue;
-    drawSprite(SNOWBUG, b.px, b.py, b.dir==='left');
-    if (b.dazed && Math.floor(performance.now()/100)%2===0){
-      ctx.strokeStyle = '#ffff00';
-      ctx.lineWidth = 2;
-      ctx.strokeRect(b.px+2, b.py+2, TILE-4, TILE-4);
-    }
+    drawSnowbug(b.px+TILE/2, b.py+TILE/2, TILE*0.34, b.dazed);
   }
   const e = g2.eddie;
   const flash = g2.hurtCooldown>0 && Math.floor(performance.now()/80)%2===0;
   if (!flash) drawSprite(e.dir==='up'?EDDIE_UP:EDDIE_DOWN, e.px, e.py, e.dir==='left');
-  const remaining = g2.bugs.filter(b=>!b.dead).length;
-  drawHud('GAME 2: ICE MAZE', `SNOWBUGS LEFT ${remaining}`);
+  drawHud(g2.timeLeft/G2_TIME);
 }
 
 // ---------- HUD / text screens ----------
-function drawHud(label, rightText){
+function drawHud(timeFrac){
   ctx.fillStyle = '#000000';
   ctx.fillRect(0,0,canvas.width,HUD_H);
-  ctx.font = 'bold 14px "Courier New", monospace';
+  ctx.font = 'bold 13px "Courier New", monospace';
   ctx.textBaseline = 'middle';
-  ctx.fillStyle = '#ffff00';
   ctx.textAlign = 'left';
-  ctx.fillText(label, 10, HUD_H/2);
-  for (let i=0;i<lives;i++){
-    drawMiniEddie(230 + i*26, 6);
-  }
-  ctx.fillStyle = '#00ffff';
-  ctx.textAlign = 'right';
-  ctx.fillText(rightText, canvas.width-160, HUD_H/2);
   ctx.fillStyle = '#ffffff';
-  ctx.fillText('SCORE '+score, canvas.width-10, HUD_H/2);
+  ctx.fillText('SCORE '+pad(score,7), 8, 14);
+  ctx.fillText('LEVEL '+pad(round,2), 250, 14);
+  ctx.fillText('LIVES '+lives, 380, 14);
+  ctx.fillStyle = '#00ff00';
+  ctx.textAlign = 'right';
+  ctx.fillText('HIGH '+pad(highscore,7), canvas.width-8, 14);
+  ctx.textAlign = 'left';
+  ctx.fillStyle = '#ffff00';
+  ctx.fillText('TIME', 8, 38);
+  const barX = 60, barW = canvas.width-68, barH = 10;
+  ctx.fillStyle = '#333333';
+  ctx.fillRect(barX, 32, barW, barH);
+  const frac = Math.max(0, Math.min(1, timeFrac));
+  ctx.fillStyle = frac>0.3 ? '#d70000' : '#ffff00';
+  ctx.fillRect(barX, 32, barW*frac, barH);
   if (paused){
     ctx.fillStyle = 'rgba(0,0,0,0.6)';
     ctx.fillRect(0,0,canvas.width,canvas.height);
     centerText('PAUSED', canvas.height/2, '#ffffff', 28);
   }
-}
-function drawMiniEddie(x,y){
-  const s = PX*0.6;
-  ctx.save();
-  ctx.translate(x,y);
-  ctx.scale(0.6,0.6);
-  for (let r=0;r<16;r++){
-    const row = EDDIE_DOWN[r];
-    for (let c=0;c<16;c++){
-      const col = PAL[row[c]];
-      if (!col) continue;
-      ctx.fillStyle = col;
-      ctx.fillRect(c*PX, r*PX, PX, PX);
-    }
-  }
-  ctx.restore();
 }
 function centerText(text, y, color, size){
   ctx.font = 'bold '+size+'px "Courier New", monospace';
@@ -691,50 +661,173 @@ function centerText(text, y, color, size){
   ctx.fillText(text, canvas.width/2, y);
 }
 
+// ---------- title screen cast art ----------
+function drawGrowlerPortrait(cx,cy,r){
+  ctx.fillStyle = '#ffffff';
+  ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(cx-r*0.62,cy-r*0.72,r*0.24,0,Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(cx+r*0.62,cy-r*0.72,r*0.24,0,Math.PI*2); ctx.fill();
+  ctx.strokeStyle = '#000000'; ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.moveTo(cx-r*0.52,cy-r*0.3); ctx.lineTo(cx-r*0.16,cy-r*0.16); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(cx+r*0.52,cy-r*0.3); ctx.lineTo(cx+r*0.16,cy-r*0.16); ctx.stroke();
+  ctx.fillStyle = '#000000';
+  ctx.beginPath(); ctx.arc(cx-r*0.3,cy-r*0.06,r*0.1,0,Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(cx+r*0.3,cy-r*0.06,r*0.1,0,Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(cx,cy+r*0.1,r*0.12,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle = '#d70000';
+  ctx.beginPath(); ctx.ellipse(cx,cy+r*0.46,r*0.42,r*0.22,0,0,Math.PI); ctx.fill();
+  ctx.fillStyle = '#ffffff';
+  for (let i=-1;i<=1;i++){
+    ctx.beginPath();
+    ctx.moveTo(cx+i*r*0.2-r*0.06,cy+r*0.28);
+    ctx.lineTo(cx+i*r*0.2+r*0.06,cy+r*0.28);
+    ctx.lineTo(cx+i*r*0.2,cy+r*0.4);
+    ctx.fill();
+  }
+}
+function drawEddiePortrait(cx,cy,r){
+  ctx.fillStyle = '#d700d7';
+  ctx.beginPath(); ctx.arc(cx,cy,r*1.15,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle = '#d70000';
+  ctx.beginPath(); ctx.arc(cx,cy,r*0.85,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle = '#ffffff';
+  ctx.beginPath(); ctx.arc(cx,cy-r*0.7,r*0.62,Math.PI,0); ctx.fill();
+  ctx.fillStyle = '#000000';
+  ctx.fillRect(cx-r*0.72, cy-r*0.18, r*1.44, r*0.34);
+  ctx.fillStyle = '#ffffff';
+  ctx.beginPath(); ctx.arc(cx-r*0.32,cy,r*0.09,0,Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(cx+r*0.32,cy,r*0.09,0,Math.PI*2); ctx.fill();
+}
+function drawPercyPortrait(cx,cy,r){
+  ctx.fillStyle = '#d700d7';
+  ctx.beginPath(); ctx.arc(cx,cy,r*1.15,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle = '#000000';
+  ctx.beginPath(); ctx.ellipse(cx,cy,r*0.8,r*0.9,0,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle = '#ffffff';
+  ctx.beginPath(); ctx.ellipse(cx,cy+r*0.12,r*0.5,r*0.58,0,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle = '#ff8800';
+  ctx.beginPath();
+  ctx.moveTo(cx-r*0.16,cy-r*0.06); ctx.lineTo(cx+r*0.16,cy-r*0.06); ctx.lineTo(cx,cy+r*0.14);
+  ctx.fill();
+  ctx.fillStyle = '#000000';
+  ctx.beginPath(); ctx.arc(cx-r*0.24,cy-r*0.3,r*0.08,0,Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(cx+r*0.24,cy-r*0.3,r*0.08,0,Math.PI*2); ctx.fill();
+}
+function drawSnowbugPortrait(cx,cy,r){
+  ctx.strokeStyle = '#000000'; ctx.lineWidth = 4;
+  for (let i=0;i<8;i++){
+    const a = i*Math.PI/4;
+    ctx.beginPath();
+    ctx.moveTo(cx+Math.cos(a)*r*0.85, cy+Math.sin(a)*r*0.85);
+    ctx.lineTo(cx+Math.cos(a)*r*1.45, cy+Math.sin(a)*r*1.45);
+    ctx.stroke();
+  }
+  ctx.fillStyle = '#ffff00';
+  ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2); ctx.fill();
+  ctx.strokeStyle = '#000000'; ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.moveTo(cx-r*0.5,cy-r*0.35); ctx.lineTo(cx-r*0.15,cy-r*0.2); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(cx+r*0.5,cy-r*0.35); ctx.lineTo(cx+r*0.15,cy-r*0.2); ctx.stroke();
+  ctx.fillStyle = '#000000';
+  ctx.beginPath(); ctx.arc(cx-r*0.28,cy-r*0.05,r*0.1,0,Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(cx+r*0.28,cy-r*0.05,r*0.1,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle = '#d70000';
+  ctx.beginPath(); ctx.ellipse(cx-r*0.95,cy+r*0.3,r*0.3,r*0.22,0,0,Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(cx+r*0.95,cy+r*0.3,r*0.3,r*0.22,0,0,Math.PI*2); ctx.fill();
+}
+function drawOceanLogo(cx,cy){
+  ctx.strokeStyle = '#00ffff'; ctx.lineWidth = 3;
+  roundRectPath(cx-72,cy-18,144,36,18);
+  ctx.stroke();
+  ctx.fillStyle = '#00ffff';
+  ctx.font = 'italic bold 20px Arial, sans-serif';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillText('ocean', cx, cy+1);
+}
+
 function drawTitle(){
   const t = performance.now()/1000;
-  // sky/ice backdrop
-  const grad = ctx.createLinearGradient(0,0,0,canvas.height);
-  grad.addColorStop(0,'#0000a0');
-  grad.addColorStop(1,'#00d7d7');
+  const grad = ctx.createLinearGradient(0,0,0,canvas.height*0.6);
+  grad.addColorStop(0,'#000018');
+  grad.addColorStop(1,'#00a0a0');
   ctx.fillStyle = grad;
-  ctx.fillRect(0,0,canvas.width,canvas.height);
-  for (let x=0;x<COLS;x++) tileFloe(x*TILE, canvas.height-TILE);
-
-  drawSprite(EDDIE_DOWN, canvas.width/2 - TILE*2.2, canvas.height-TILE*2.15, false);
-  drawSprite(PERCY, canvas.width/2 - TILE*0.6, canvas.height-TILE*2.0, false);
-  drawSprite(GROWLER, canvas.width/2 + TILE*0.9, canvas.height-TILE*2.15 + Math.sin(t*2)*4, false);
+  ctx.fillRect(0,0,canvas.width,canvas.height*0.6);
+  for (let i=0;i<36;i++){
+    const sx = (i*53+17) % canvas.width;
+    const sy = (i*31+11) % (canvas.height*0.32);
+    ctx.fillStyle = (i%4===0) ? '#ffffff' : '#88aabb';
+    ctx.fillRect(sx, sy, 2, 2);
+  }
+  ctx.fillStyle = '#00d7d7';
+  ctx.beginPath();
+  ctx.moveTo(0, canvas.height*0.42);
+  for (let x=0;x<=canvas.width;x+=28){
+    ctx.lineTo(x, canvas.height*0.42 - Math.abs(Math.sin(x*0.03))*36);
+  }
+  ctx.lineTo(canvas.width, canvas.height*0.58);
+  ctx.lineTo(0, canvas.height*0.58);
+  ctx.closePath(); ctx.fill();
 
   ctx.save();
-  ctx.translate(canvas.width/2, canvas.height*0.22);
-  const bob = Math.sin(t*2)*3;
-  ctx.font = 'bold 54px "Courier New", monospace';
+  ctx.translate(canvas.width/2, canvas.height*0.13);
+  const bob = Math.sin(t*2)*2;
+  ctx.font = 'bold 46px "Arial Black", Arial, sans-serif';
   ctx.textAlign='center'; ctx.textBaseline='middle';
-  ctx.lineWidth = 6; ctx.strokeStyle = '#000000';
-  ctx.strokeText('ESKIMO', 0, -30+bob);
-  ctx.strokeText('EDDIE', 0, 30+bob);
-  ctx.fillStyle = '#ffff00';
-  ctx.fillText('ESKIMO', 0, -30+bob);
-  ctx.fillStyle = '#00ffff';
-  ctx.fillText('EDDIE', 0, 30+bob);
+  ctx.lineWidth = 8; ctx.strokeStyle = '#000000';
+  ctx.strokeText('ESKIMO', 0, -22+bob);
+  ctx.strokeText('EDDIE', 0, 24+bob);
+  const lg = ctx.createLinearGradient(0,-40,0,40);
+  lg.addColorStop(0,'#ffffff'); lg.addColorStop(1,'#66cccc');
+  ctx.fillStyle = lg;
+  ctx.fillText('ESKIMO', 0, -22+bob);
+  ctx.fillText('EDDIE', 0, 24+bob);
   ctx.restore();
 
-  centerText('TWO GAMES IN ONE!', canvas.height*0.46, '#ffffff', 20);
-  centerText('1: RESCUE PERCY FROM THE GROWLERS', canvas.height*0.53, '#ffff00', 14);
-  centerText('2: PUSH ICE BLOCKS TO CRUSH THE SNOWBUGS', canvas.height*0.58, '#ffff00', 14);
+  centerText('FEATURING', canvas.height*0.28, '#ffff00', 15);
+
+  const py = canvas.height*0.40, pr = 34;
+  const px1 = canvas.width*0.14, px2 = canvas.width*0.38, px3 = canvas.width*0.62, px4 = canvas.width*0.86;
+  drawGrowlerPortrait(px1, py, pr);
+  drawEddiePortrait(px2, py, pr);
+  drawPercyPortrait(px3, py, pr);
+  drawSnowbugPortrait(px4, py, pr);
+  const ly = py + pr*1.55;
+  centerTextAt(px1, ly, 'GROWLER', '#ffff00', 11);
+  centerTextAt(px2, ly, 'ESKIMO EDDIE', '#ffff00', 11);
+  centerTextAt(px3, ly, 'PERCY PENGUIN', '#ffff00', 11);
+  centerTextAt(px4, ly, 'SNOWBUG', '#ffff00', 11);
+
+  ctx.fillStyle = '#0000d7';
+  ctx.fillRect(0, canvas.height*0.58, canvas.width, canvas.height*0.11);
+  ctx.strokeStyle = '#0000ff'; ctx.lineWidth = 2;
+  for (let x=-20;x<canvas.width+20;x+=30){
+    ctx.beginPath();
+    ctx.arc(x + Math.sin(t+x*0.05)*4, canvas.height*0.615, 8, Math.PI, Math.PI*2);
+    ctx.stroke();
+  }
+  drawOceanLogo(canvas.width/2, canvas.height*0.635);
+
+  centerText('TWO GAMES IN ONE!', canvas.height*0.75, '#ffffff', 18);
+  centerText('1: RESCUE PERCY FROM THE GROWLERS', canvas.height*0.81, '#ffff00', 13);
+  centerText('2: PUSH ICE BLOCKS TO CRUSH THE SNOWBUGS', canvas.height*0.855, '#ffff00', 13);
 
   if (Math.floor(t*2)%2===0){
-    centerText('PRESS ENTER TO START', canvas.height*0.68, '#00ff00', 22);
+    centerText('PRESS ENTER TO START', canvas.height*0.92, '#00ff00', 18);
   }
-  centerText('HIGH SCORE '+highscore, canvas.height*0.76, '#ff00ff', 16);
-  centerText('© HOMAGE EDITION — ARROWS/WASD TO MOVE', canvas.height*0.82, '#888888', 12);
+  centerText('HIGH SCORE '+pad(highscore,7), canvas.height*0.97, '#ff00ff', 13);
+}
+function centerTextAt(x, y, text, color, size){
+  ctx.font = 'bold '+size+'px "Courier New", monospace';
+  ctx.fillStyle = color;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, x, y);
 }
 function drawTransition(text1, text2){
   ctx.fillStyle = '#000000';
   ctx.fillRect(0,0,canvas.width,canvas.height);
   centerText(text1, canvas.height*0.42, '#ffff00', 30);
   centerText(text2, canvas.height*0.52, '#00ffff', 18);
-  centerText('SCORE '+score, canvas.height*0.60, '#ffffff', 18);
+  centerText('SCORE '+pad(score,7), canvas.height*0.60, '#ffffff', 18);
   if (Math.floor(performance.now()/400)%2===0){
     centerText('PRESS ENTER TO CONTINUE', canvas.height*0.72, '#00ff00', 16);
   }
@@ -743,8 +836,8 @@ function drawGameOver(){
   ctx.fillStyle = '#200000';
   ctx.fillRect(0,0,canvas.width,canvas.height);
   centerText('GAME OVER', canvas.height*0.38, '#ff0000', 40);
-  centerText('FINAL SCORE '+score, canvas.height*0.5, '#ffffff', 22);
-  centerText('HIGH SCORE '+highscore, canvas.height*0.58, '#ffff00', 18);
+  centerText('FINAL SCORE '+pad(score,7), canvas.height*0.5, '#ffffff', 22);
+  centerText('HIGH SCORE '+pad(highscore,7), canvas.height*0.58, '#ffff00', 18);
   if (Math.floor(performance.now()/400)%2===0){
     centerText('PRESS ENTER FOR TITLE SCREEN', canvas.height*0.72, '#00ff00', 16);
   }
