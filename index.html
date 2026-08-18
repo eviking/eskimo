@@ -1,0 +1,783 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Eskimo Eddie</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  html,body{
+    margin:0; padding:0; height:100%;
+    background:#000;
+    display:flex; align-items:center; justify-content:center;
+    font-family: 'Courier New', monospace;
+    overflow:hidden;
+  }
+  #wrap{
+    display:flex; flex-direction:column; align-items:center;
+    gap:8px;
+  }
+  canvas{
+    background:#000;
+    image-rendering:pixelated;
+    image-rendering:crisp-edges;
+    border:4px solid #444;
+    max-width:96vw;
+    max-height:92vh;
+  }
+  #hint{
+    color:#8cf;
+    font-size:13px;
+    letter-spacing:1px;
+    text-align:center;
+  }
+  #hint b{ color:#ff5; }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <canvas id="c" width="672" height="528"></canvas>
+  <div id="hint">ARROWS / WASD move &nbsp;&middot;&nbsp; ENTER start / continue &nbsp;&middot;&nbsp; P pause &nbsp;&middot;&nbsp; M mute</div>
+</div>
+<script>
+(function(){
+"use strict";
+
+/* ============================================================
+   ESKIMO EDDIE - a from-scratch homage to the 1984 8-bit
+   "two games in one" arctic arcade classic. All graphics
+   below are original pixel art drawn procedurally on canvas.
+   ============================================================ */
+
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+ctx.imageSmoothingEnabled = false;
+
+// ---------- palette (classic 8-bit micro palette) ----------
+const PAL = {
+  '.': null,
+  'k': '#000000', // black
+  'w': '#d7d7d7', // white
+  'W': '#ffffff', // bright white
+  'b': '#0000d7', // blue
+  'B': '#0000ff', // bright blue
+  'r': '#d70000', // red
+  'R': '#ff0000', // bright red
+  'm': '#d700d7', // magenta
+  'M': '#ff00ff', // bright magenta
+  'g': '#00d700', // green
+  'G': '#00ff00', // bright green
+  'c': '#00d7d7', // cyan
+  'C': '#00ffff', // bright cyan
+  'y': '#d7d700', // yellow
+  'Y': '#ffff00', // bright yellow
+  'f': '#f0b088', // skin tone
+  'o': '#ff8800', // orange (beak/feet)
+  'n': '#7a5230', // brown (eyes/pupils reuse)
+};
+
+const PX = 3;      // display pixels per sprite pixel
+const TILE = 16 * PX; // tile size on screen (48)
+const COLS = 14;
+const ROWS = 10;
+const HUD_H = TILE;
+canvas.width = COLS * TILE;
+canvas.height = ROWS * TILE + HUD_H;
+
+function drawSprite(rows, dx, dy, mirror){
+  const h = rows.length;
+  for (let r = 0; r < h; r++){
+    const row = rows[r];
+    const w = row.length;
+    for (let cc = 0; cc < w; cc++){
+      const ch = row[cc];
+      const col = PAL[ch];
+      if (!col) continue;
+      const c = mirror ? (w - 1 - cc) : cc;
+      ctx.fillStyle = col;
+      ctx.fillRect(dx + c*PX, dy + r*PX, PX, PX);
+    }
+  }
+}
+
+// ---------- sprite data (16x16 pixel grids) ----------
+const EDDIE_DOWN = [
+"................",
+"................",
+"......WWWW......",
+".....WffffW.....",
+".....WfkfkfW....",
+".....WffffW.....",
+".....WWffWW.....",
+"....bbbBBBbbb...",
+"....bbBBBBBbb...",
+"..RbbBBBBBBbbR..",
+"..RRbBBBBBBbRR..",
+"....bbBBBBbb....",
+"....bb....bb....",
+"....bb....bb....",
+"....OO....OO....",
+"...OOO....OOO...",
+];
+const EDDIE_UP = [
+"................",
+"................",
+"......WWWW......",
+".....WWWWWW.....",
+".....WWWWWW.....",
+".....WWkkWW.....",
+".....WWffWW.....",
+"....bbbBBBbbb...",
+"....bbBBBBBbb...",
+"..RbbBBBBBBbbR..",
+"..RRbBBBBBBbRR..",
+"....bbBBBBbb....",
+"....bb....bb....",
+"....bb....bb....",
+"....OO....OO....",
+"...OOO....OOO...",
+];
+// replace stray 'O' with orange key not in palette map above; use 'o'
+function fix(rows){ return rows.map(r => r.replace(/O/g,'o')); }
+const EDDIE_DOWN_F = fix(EDDIE_DOWN);
+const EDDIE_UP_F = fix(EDDIE_UP);
+
+const PERCY = [
+"................",
+"................",
+".......kk.......",
+"......kwwk......",
+"......kwWk......",
+".....kkwwkk.....",
+".....kkkkkk.....",
+".....kwwwwk.....",
+".....kwwwwk.....",
+".....kwwwwk.....",
+".....kwwwwk.....",
+".....kkwwkk.....",
+"......okko......",
+".......oo.......",
+"................",
+"................",
+];
+
+// Growler - a grumpy white sea-bear that swims across the water rows
+const GROWLER = [
+"................",
+"................",
+"....wwwwwwww....",
+"...wWWWWWWWWw...",
+"..wWWkWWWWkWWw..",
+"..wWWRWWWWRWWw..",
+".wWWWWWWWWWWWWw.",
+".wWkkkkkkkkkkWw.",
+".wWkWWWWWWWWkWw.",
+"..wWWWWWWWWWw...",
+"..wwwwwwwwwwww..",
+"...cccccccccc...",
+"..cccccccccccc..",
+"...cc..cc..cc...",
+"................",
+"................",
+];
+
+// Snowbug - small maze pest
+const SNOWBUG = [
+"................",
+"................",
+"......cccc......",
+".....cCCCCc.....",
+"....cCkCCkCc....",
+"....cCCCCCCc....",
+".....cCCCCc.....",
+"....c.cccc.c....",
+"...c..cccc..c...",
+"..c...cccc...c..",
+"......c..c......",
+".....c....c.....",
+"................",
+"................",
+"................",
+"................",
+];
+
+const ICE_BLOCK = [
+"WWWWWWWWWWWWWWWW",
+"WCCCCCCCCCCCCCCW",
+"WCwwwwwwwwwwwwCW",
+"WCwCCCCCCCCCCwCW",
+"WCwCwwwwwwwwCwCW",
+"WCwCwCCCCCCwCwCW",
+"WCwCwCwwwwCwCwCW",
+"WCwCwCwCCwCwCwCW",
+"WCwCwCwCCwCwCwCW",
+"WCwCwCwwwwCwCwCW",
+"WCwCwCCCCCCwCwCW",
+"WCwCwwwwwwwwCwCW",
+"WCwCCCCCCCCCCwCW",
+"WCCCCCCCCCCCCCCW",
+"WWWWWWWWWWWWWWWW",
+"kkkkkkkkkkkkkkkk",
+];
+const ICE_BLOCK_CRACK = ICE_BLOCK.map((r,i)=> i>3&&i<12 ? r.replace(/w/g,(m,idx)=> (idx%3===0?'k':m)) : r);
+
+const WALL = [
+"kkkkkkkkkkkkkkkk",
+"kbbbbbbbbbbbbbbk",
+"kbBBBBBBBBBBBBbk",
+"kbBkkkkkkkkkkBbk",
+"kbBkBBBBBBBBkBbk",
+"kbBkBkkkkkkBkBbk",
+"kbBkBkBBBBkBkBbk",
+"kbBkBkBkkBkBkBbk",
+"kbBkBkBkkBkBkBbk",
+"kbBkBkBBBBkBkBbk",
+"kbBkBkkkkkkBkBbk",
+"kbBkBBBBBBBBkBbk",
+"kbBkkkkkkkkkkBbk",
+"kbBBBBBBBBBBBBbk",
+"kbbbbbbbbbbbbbbk",
+"kkkkkkkkkkkkkkkk",
+];
+
+function tileWater(dx,dy,phase){
+  ctx.fillStyle = '#0000d7';
+  ctx.fillRect(dx,dy,TILE,TILE);
+  ctx.fillStyle = '#0000ff';
+  for(let i=0;i<3;i++){
+    const yy = dy + ((i*5 + phase) % 16)*PX;
+    ctx.fillRect(dx, yy, TILE, PX);
+  }
+}
+function tileFloe(dx,dy){
+  ctx.fillStyle = '#00d7d7';
+  ctx.fillRect(dx,dy,TILE,TILE);
+  ctx.fillStyle = '#00ffff';
+  ctx.fillRect(dx+PX,dy+PX,TILE-2*PX,TILE-2*PX);
+  ctx.strokeStyle = '#0000d7';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(dx+0.5,dy+0.5,TILE-1,TILE-1);
+}
+function tileHole(dx,dy){
+  tileFloe(dx,dy);
+  ctx.fillStyle = '#000000';
+  ctx.beginPath();
+  ctx.moveTo(dx+TILE*0.5, dy+TILE*0.08);
+  ctx.lineTo(dx+TILE*0.85, dy+TILE*0.35);
+  ctx.lineTo(dx+TILE*0.7, dy+TILE*0.9);
+  ctx.lineTo(dx+TILE*0.3, dy+TILE*0.85);
+  ctx.lineTo(dx+TILE*0.15, dy+TILE*0.3);
+  ctx.closePath();
+  ctx.fill();
+}
+function tileBase(dx,dy){
+  ctx.fillStyle = '#d7d700';
+  ctx.fillRect(dx,dy,TILE,TILE);
+  ctx.fillStyle = '#ffff00';
+  ctx.fillRect(dx+PX,dy+PX,TILE-2*PX,TILE-2*PX);
+}
+
+// ---------- audio (simple beeper-style FX) ----------
+let audioCtx = null, muted = false;
+function beep(freq, dur, type, vol){
+  if (muted) return;
+  try{
+    if (!audioCtx) audioCtx = new (window.AudioContext||window.webkitAudioContext)();
+    const o = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    o.type = type || 'square';
+    o.frequency.value = freq;
+    g.gain.value = (vol!=null?vol:0.08);
+    o.connect(g); g.connect(audioCtx.destination);
+    o.start();
+    g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + dur);
+    o.stop(audioCtx.currentTime + dur);
+  }catch(e){}
+}
+const SFX = {
+  step:   ()=>beep(180,0.03,'square',0.03),
+  pickup: ()=>{beep(660,0.08,'square');beep(880,0.12,'square');},
+  score:  ()=>{beep(520,0.06);beep(780,0.10);},
+  hurt:   ()=>{beep(120,0.25,'sawtooth',0.12);},
+  crush:  ()=>{beep(300,0.05);beep(150,0.12,'triangle');},
+  push:   ()=>beep(220,0.05,'triangle',0.05),
+  clear:  ()=>{[440,554,660,880].forEach((f,i)=>setTimeout(()=>beep(f,0.15),i*90));},
+  gameover:()=>{[300,260,220,180].forEach((f,i)=>setTimeout(()=>beep(f,0.25,'sawtooth'),i*140));},
+  start:  ()=>{[330,440,550,660].forEach((f,i)=>setTimeout(()=>beep(f,0.10),i*70));},
+};
+
+// ---------- input ----------
+const keys = {};
+window.addEventListener('keydown', e=>{
+  keys[e.code] = true;
+  if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','Space'].includes(e.code)) e.preventDefault();
+  if (e.code === 'KeyM'){ muted = !muted; }
+  handleMenuKey(e.code);
+});
+window.addEventListener('keyup', e=>{ keys[e.code] = false; });
+function dirHeld(){
+  if (keys['ArrowUp']||keys['KeyW']) return {x:0,y:-1,name:'up'};
+  if (keys['ArrowDown']||keys['KeyS']) return {x:0,y:1,name:'down'};
+  if (keys['ArrowLeft']||keys['KeyA']) return {x:-1,y:0,name:'left'};
+  if (keys['ArrowRight']||keys['KeyD']) return {x:1,y:0,name:'right'};
+  return null;
+}
+
+// ---------- game state machine ----------
+let STATE = 'title'; // title, g1, g1clear, g2, g2clear, gameover
+let lives = 3, score = 0, round = 1, highscore = 0;
+try{ highscore = parseInt(localStorage.getItem('eskimoEddieHi')||'0',10)||0; }catch(e){}
+let paused = false;
+let msgTimer = 0;
+
+function handleMenuKey(code){
+  if (code !== 'Enter' && code !== 'NumpadEnter') return;
+  if (STATE === 'title'){ startGame(); }
+  else if (STATE === 'g1clear'){ STATE='g2'; initGame2(); }
+  else if (STATE === 'g2clear'){ round++; STATE='g1'; initGame1(); }
+  else if (STATE === 'gameover'){ STATE='title'; }
+}
+window.addEventListener('keydown', e=>{
+  if (e.code === 'KeyP' && (STATE==='g1'||STATE==='g2')) paused = !paused;
+});
+
+function startGame(){
+  lives = 3; score = 0; round = 1;
+  STATE = 'g1';
+  SFX.start();
+  initGame1();
+}
+
+// ================= GAME 1 : RESCUE PERCY =================
+let g1;
+function initGame1(){
+  const speedBoost = (round-1)*0.4;
+  g1 = {
+    eddie: { tx:6, ty:9, px:0, py:0, moving:false, dir:'down', carrying:false, moveT:0 },
+    percyTx: 6, percyTy:0, percyVisible:true,
+    holes: [],
+    growlers: [],
+    rescues: 0,
+    needed: 3,
+    hurtCooldown: 0,
+    stepTimer:0,
+  };
+  g1.eddie.px = g1.eddie.tx*TILE; g1.eddie.py = g1.eddie.ty*TILE + HUD_H;
+  const holeCount = 4 + Math.min(round-1, 3);
+  for (let i=0;i<holeCount;i++){
+    g1.holes.push({ x: 1+Math.floor(Math.random()*(COLS-2)), y: 2+Math.floor(Math.random()*6), t: Math.random()*Math.PI*2, dir: Math.random()<0.5?1:-1 });
+  }
+  g1.growlers.push({ y:2, x: 0, speed: 0.03+speedBoost*0.01, dir:1 });
+  g1.growlers.push({ y:5, x: COLS-1, speed: 0.035+speedBoost*0.01, dir:-1 });
+  placePercy();
+}
+function placePercy(){
+  g1.percyTx = 1 + Math.floor(Math.random()*(COLS-2));
+  g1.percyTy = 0;
+  g1.percyVisible = true;
+}
+function resetEddie1(){
+  g1.eddie.tx = 6; g1.eddie.ty = 9;
+  g1.eddie.px = g1.eddie.tx*TILE; g1.eddie.py = g1.eddie.ty*TILE + HUD_H;
+  g1.eddie.carrying = false;
+  g1.eddie.moving = false;
+  placePercy();
+}
+function loseLife(){
+  lives--;
+  SFX.hurt();
+  if (lives <= 0){
+    STATE = 'gameover';
+    SFX.gameover();
+    if (score > highscore){ highscore = score; try{ localStorage.setItem('eskimoEddieHi', String(highscore)); }catch(e){} }
+  }
+  return lives > 0;
+}
+function updateGame1(dt){
+  if (g1.hurtCooldown > 0){ g1.hurtCooldown -= dt; return; }
+  const e = g1.eddie;
+  // movement
+  if (!e.moving){
+    const d = dirHeld();
+    if (d){
+      const nx = e.tx + d.x, ny = e.ty + d.y;
+      if (nx>=0 && nx<COLS && ny>=0 && ny<ROWS){
+        e.tx = nx; e.ty = ny; e.moving = true; e.dir = d.name;
+      }
+    }
+  } else {
+    const tx = e.tx*TILE, ty = e.ty*TILE + HUD_H;
+    const spd = TILE * dt * 6.2;
+    e.px += Math.sign(tx-e.px)*Math.min(spd, Math.abs(tx-e.px));
+    e.py += Math.sign(ty-e.py)*Math.min(spd, Math.abs(ty-e.py));
+    if (e.px===tx && e.py===ty){
+      e.moving = false;
+      onEddieArrive1();
+    }
+  }
+  // holes drift
+  for (const h of g1.holes){
+    h.t += dt*0.6;
+    if (Math.random() < dt*0.15){
+      const nx = h.x + (Math.random()<0.5?-1:1);
+      if (nx>=1 && nx<COLS-1) h.x = nx;
+      const ny = h.y + (Math.random()<0.5?-1:1);
+      if (ny>=2 && ny<=7) h.y = ny;
+    }
+  }
+  // growlers swim
+  for (const gr of g1.growlers){
+    gr.x += gr.dir * gr.speed * dt * 60;
+    if (gr.x > COLS+0.5){ gr.x = -1.5; }
+    if (gr.x < -1.5){ gr.x = COLS+0.5; }
+  }
+  checkHazards1();
+}
+function onEddieArrive1(){
+  const e = g1.eddie;
+  if (!e.carrying && e.tx===g1.percyTx && e.ty===g1.percyTy){
+    e.carrying = true;
+    g1.percyVisible = false;
+    SFX.pickup();
+  } else if (e.carrying && e.ty === 9){
+    // delivered
+    e.carrying = false;
+    g1.rescues++;
+    score += 100;
+    SFX.score();
+    if (g1.rescues >= g1.needed){
+      STATE = 'g1clear';
+      score += 250;
+    } else {
+      placePercy();
+    }
+  }
+}
+function checkHazards1(){
+  const e = g1.eddie;
+  if (e.moving) return;
+  for (const h of g1.holes){
+    if (Math.round(h.x)===e.tx && Math.round(h.y)===e.ty){
+      hitHazard1(); return;
+    }
+  }
+  for (const gr of g1.growlers){
+    if (Math.round(gr.x)===e.tx && gr.y===e.ty){
+      hitHazard1(); return;
+    }
+  }
+}
+function hitHazard1(){
+  if (g1.hurtCooldown > 0) return;
+  g1.hurtCooldown = 1.0;
+  if (loseLife()) resetEddie1();
+}
+function drawGame1(){
+  // background
+  for (let ty=0; ty<ROWS; ty++){
+    for (let tx=0; tx<COLS; tx++){
+      const dx = tx*TILE, dy = ty*TILE+HUD_H;
+      if (ty<2) tileWater(dx,dy, Math.floor(performance.now()/120)+tx*3);
+      else if (ty===9) tileBase(dx,dy);
+      else tileFloe(dx,dy);
+    }
+  }
+  for (const h of g1.holes){
+    tileHole(Math.round(h.x)*TILE, Math.round(h.y)*TILE+HUD_H);
+  }
+  if (g1.percyVisible){
+    drawSprite(PERCY, g1.percyTx*TILE, g1.percyTy*TILE+HUD_H, false);
+  }
+  for (const gr of g1.growlers){
+    drawSprite(GROWLER, Math.round(gr.x*PX*16)/PX/16*0 + gr.x*TILE, gr.y*TILE+HUD_H, gr.dir<0);
+  }
+  const e = g1.eddie;
+  const flash = g1.hurtCooldown>0 && Math.floor(performance.now()/80)%2===0;
+  if (!flash){
+    drawSprite(e.dir==='up'?EDDIE_UP_F:EDDIE_DOWN_F, e.px, e.py, e.dir==='left');
+    if (e.carrying) drawSprite(PERCY, e.px, e.py - TILE*0.55, false);
+  }
+  drawHud('GAME 1: RESCUE PERCY', `RESCUES ${g1.rescues}/${g1.needed}`);
+}
+
+// ================= GAME 2 : ICE MAZE =================
+let g2;
+function initGame2(){
+  const grid = [];
+  for (let y=0;y<ROWS;y++){
+    const row = [];
+    for (let x=0;x<COLS;x++){
+      if (x===0||y===0||x===COLS-1||y===ROWS-1) row.push('wall');
+      else row.push('block');
+    }
+    grid.push(row);
+  }
+  // clear a starting pocket
+  const clearCells = [[1,1],[2,1],[1,2]];
+  for (const [x,y] of clearCells) grid[y][x] = 'empty';
+  const enemyCount = Math.min(2 + round, 6);
+  const bugs = [];
+  const spawns = [[COLS-2,ROWS-2],[COLS-2,1],[1,ROWS-2],[COLS-2,Math.floor(ROWS/2)],[Math.floor(COLS/2),1],[Math.floor(COLS/2),ROWS-2]];
+  for (let i=0;i<enemyCount;i++){
+    const [sx,sy] = spawns[i % spawns.length];
+    grid[sy][sx] = 'empty';
+    bugs.push({ tx:sx, ty:sy, px:sx*TILE, py:sy*TILE+HUD_H, moving:false, dir:'down', moveT:0, speed: 3.0 + round*0.2 });
+  }
+  g2 = {
+    grid,
+    eddie: { tx:1, ty:1, px:TILE, py:TILE+HUD_H, moving:false, dir:'down' },
+    bugs,
+    hurtCooldown: 0,
+    bugTimer: 0,
+  };
+}
+function cellAt(x,y){
+  if (x<0||y<0||x>=COLS||y>=ROWS) return 'wall';
+  return g2.grid[y][x];
+}
+function updateGame2(dt){
+  if (g2.hurtCooldown > 0){ g2.hurtCooldown -= dt; }
+  const e = g2.eddie;
+  if (!e.moving){
+    const d = dirHeld();
+    if (d){
+      const nx = e.tx+d.x, ny = e.ty+d.y;
+      const cell = cellAt(nx,ny);
+      let canMove = false;
+      if (cell === 'empty' || cell === 'crack'){
+        canMove = true;
+      } else if (cell === 'block'){
+        const bx = nx+d.x, by = ny+d.y;
+        const beyond = cellAt(bx,by);
+        const bugHere = g2.bugs.find(b=>!b.dead && b.tx===bx && b.ty===by);
+        if (beyond === 'empty' || beyond === 'crack'){
+          if (bugHere){
+            bugHere.dead = true; score += 75; SFX.crush();
+            g2.grid[ny][nx] = 'empty';
+          } else {
+            g2.grid[by][bx] = 'block';
+            g2.grid[ny][nx] = 'empty';
+          }
+          SFX.push();
+          canMove = true;
+        } else {
+          // pushing into a wall/other block: crack it, then break
+          if (g2.grid[ny][nx] === 'block'){ g2.grid[ny][nx] = 'crack'; score += 5; }
+          else { g2.grid[ny][nx] = 'empty'; score += 20; }
+        }
+      }
+      if (canMove){ e.tx = nx; e.ty = ny; e.moving = true; e.dir = d.name; }
+    }
+  } else {
+    const tx = e.tx*TILE, ty = e.ty*TILE+HUD_H;
+    const spd = TILE * dt * 6.2;
+    e.px += Math.sign(tx-e.px)*Math.min(spd, Math.abs(tx-e.px));
+    e.py += Math.sign(ty-e.py)*Math.min(spd, Math.abs(ty-e.py));
+    if (e.px===tx && e.py===ty) e.moving = false;
+  }
+  // bugs
+  for (const b of g2.bugs){
+    if (b.dead) continue;
+    if (!b.moving){
+      b.moveT += dt;
+      if (b.moveT > 1/b.speed){
+        b.moveT = 0;
+        const dx = e.tx-b.tx, dy = e.ty-b.ty;
+        const options = [];
+        if (Math.abs(dx)>=Math.abs(dy)){
+          if (dx!==0) options.push({x:Math.sign(dx),y:0});
+          if (dy!==0) options.push({x:0,y:Math.sign(dy)});
+        } else {
+          if (dy!==0) options.push({x:0,y:Math.sign(dy)});
+          if (dx!==0) options.push({x:Math.sign(dx),y:0});
+        }
+        options.push({x: Math.random()<0.5?1:-1, y:0});
+        options.push({x:0, y: Math.random()<0.5?1:-1});
+        for (const o of options){
+          const nx = b.tx+o.x, ny = b.ty+o.y;
+          const cell = cellAt(nx,ny);
+          if (cell==='empty' || cell==='crack'){
+            b.tx=nx; b.ty=ny; b.moving=true;
+            b.dir = o.y<0?'up':o.y>0?'down':(o.x<0?'left':'right');
+            break;
+          }
+        }
+      }
+    } else {
+      const tx = b.tx*TILE, ty = b.ty*TILE+HUD_H;
+      const spd = TILE * dt * (2.6 + round*0.15);
+      b.px += Math.sign(tx-b.px)*Math.min(spd, Math.abs(tx-b.px));
+      b.py += Math.sign(ty-b.py)*Math.min(spd, Math.abs(ty-b.py));
+      if (b.px===tx && b.py===ty) b.moving = false;
+    }
+    if (g2.hurtCooldown<=0 && Math.round(b.px/TILE)===Math.round(e.px/TILE) && Math.round(b.py/TILE)===Math.round(e.py/TILE)){
+      g2.hurtCooldown = 1.0;
+      if (loseLife()){
+        e.tx=1; e.ty=1; e.px=TILE; e.py=TILE+HUD_H; e.moving=false;
+      }
+    }
+  }
+  if (g2.bugs.every(b=>b.dead)){
+    STATE = 'g2clear';
+    score += 300;
+    SFX.clear();
+  }
+}
+function drawGame2(){
+  for (let y=0;y<ROWS;y++){
+    for (let x=0;x<COLS;x++){
+      const dx=x*TILE, dy=y*TILE+HUD_H;
+      const cell = g2.grid[y][x];
+      if (cell==='wall') drawSprite(WALL, dx, dy, false);
+      else {
+        ctx.fillStyle = '#000030';
+        ctx.fillRect(dx,dy,TILE,TILE);
+        if (cell==='block') drawSprite(ICE_BLOCK, dx, dy, false);
+        else if (cell==='crack') drawSprite(ICE_BLOCK_CRACK, dx, dy, false);
+      }
+    }
+  }
+  for (const b of g2.bugs){
+    if (b.dead) continue;
+    drawSprite(SNOWBUG, b.px, b.py, b.dir==='left');
+  }
+  const e = g2.eddie;
+  const flash = g2.hurtCooldown>0 && Math.floor(performance.now()/80)%2===0;
+  if (!flash) drawSprite(e.dir==='up'?EDDIE_UP_F:EDDIE_DOWN_F, e.px, e.py, e.dir==='left');
+  const remaining = g2.bugs.filter(b=>!b.dead).length;
+  drawHud('GAME 2: ICE MAZE', `SNOWBUGS LEFT ${remaining}`);
+}
+
+// ---------- HUD / text screens ----------
+function drawHud(label, rightText){
+  ctx.fillStyle = '#000000';
+  ctx.fillRect(0,0,canvas.width,HUD_H);
+  ctx.font = 'bold 14px "Courier New", monospace';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#ffff00';
+  ctx.textAlign = 'left';
+  ctx.fillText(label, 10, HUD_H/2);
+  for (let i=0;i<lives;i++){
+    drawMiniEddie(230 + i*26, 6);
+  }
+  ctx.fillStyle = '#00ffff';
+  ctx.textAlign = 'right';
+  ctx.fillText(rightText, canvas.width-160, HUD_H/2);
+  ctx.fillStyle = '#ffffff';
+  ctx.fillText('SCORE '+score, canvas.width-10, HUD_H/2);
+  if (paused){
+    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+    ctx.fillRect(0,0,canvas.width,canvas.height);
+    centerText('PAUSED', canvas.height/2, '#ffffff', 28);
+  }
+}
+function drawMiniEddie(x,y){
+  const s = PX*0.6;
+  ctx.save();
+  ctx.translate(x,y);
+  ctx.scale(0.6,0.6);
+  for (let r=0;r<16;r++){
+    const row = EDDIE_DOWN_F[r];
+    for (let c=0;c<16;c++){
+      const col = PAL[row[c]];
+      if (!col) continue;
+      ctx.fillStyle = col;
+      ctx.fillRect(c*PX, r*PX, PX, PX);
+    }
+  }
+  ctx.restore();
+}
+function centerText(text, y, color, size){
+  ctx.font = 'bold '+size+'px "Courier New", monospace';
+  ctx.fillStyle = color;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, canvas.width/2, y);
+}
+
+function drawTitle(){
+  const t = performance.now()/1000;
+  // sky/ice backdrop
+  const grad = ctx.createLinearGradient(0,0,0,canvas.height);
+  grad.addColorStop(0,'#0000a0');
+  grad.addColorStop(1,'#00d7d7');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+  for (let x=0;x<COLS;x++) tileFloe(x*TILE, canvas.height-TILE);
+
+  drawSprite(EDDIE_DOWN_F, canvas.width/2 - TILE*2.2, canvas.height-TILE*2.15, false);
+  drawSprite(PERCY, canvas.width/2 - TILE*0.6, canvas.height-TILE*2.0, false);
+  drawSprite(GROWLER, canvas.width/2 + TILE*0.9, canvas.height-TILE*2.15 + Math.sin(t*2)*4, false);
+
+  ctx.save();
+  ctx.translate(canvas.width/2, canvas.height*0.22);
+  const bob = Math.sin(t*2)*3;
+  ctx.font = 'bold 54px "Courier New", monospace';
+  ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.lineWidth = 6; ctx.strokeStyle = '#000000';
+  ctx.strokeText('ESKIMO', 0, -30+bob);
+  ctx.strokeText('EDDIE', 0, 30+bob);
+  ctx.fillStyle = '#ffff00';
+  ctx.fillText('ESKIMO', 0, -30+bob);
+  ctx.fillStyle = '#00ffff';
+  ctx.fillText('EDDIE', 0, 30+bob);
+  ctx.restore();
+
+  centerText('TWO GAMES IN ONE!', canvas.height*0.46, '#ffffff', 20);
+  centerText('1: RESCUE PERCY FROM THE GROWLERS', canvas.height*0.53, '#ffff00', 14);
+  centerText('2: CLEAR THE SNOWBUGS FROM THE ICE MAZE', canvas.height*0.58, '#ffff00', 14);
+
+  if (Math.floor(t*2)%2===0){
+    centerText('PRESS ENTER TO START', canvas.height*0.68, '#00ff00', 22);
+  }
+  centerText('HIGH SCORE '+highscore, canvas.height*0.76, '#ff00ff', 16);
+  centerText('© HOMAGE EDITION — ARROWS/WASD TO MOVE', canvas.height*0.82, '#888888', 12);
+}
+function drawTransition(text1, text2){
+  ctx.fillStyle = '#000000';
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+  centerText(text1, canvas.height*0.42, '#ffff00', 30);
+  centerText(text2, canvas.height*0.52, '#00ffff', 18);
+  centerText('SCORE '+score, canvas.height*0.60, '#ffffff', 18);
+  if (Math.floor(performance.now()/400)%2===0){
+    centerText('PRESS ENTER TO CONTINUE', canvas.height*0.72, '#00ff00', 16);
+  }
+}
+function drawGameOver(){
+  ctx.fillStyle = '#200000';
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+  centerText('GAME OVER', canvas.height*0.38, '#ff0000', 40);
+  centerText('FINAL SCORE '+score, canvas.height*0.5, '#ffffff', 22);
+  centerText('HIGH SCORE '+highscore, canvas.height*0.58, '#ffff00', 18);
+  if (Math.floor(performance.now()/400)%2===0){
+    centerText('PRESS ENTER FOR TITLE SCREEN', canvas.height*0.72, '#00ff00', 16);
+  }
+}
+
+// ---------- main loop ----------
+let last = performance.now();
+function frame(now){
+  const dt = Math.min(0.05, (now-last)/1000);
+  last = now;
+
+  if (STATE === 'title'){
+    drawTitle();
+  } else if (STATE === 'g1'){
+    if (!paused) updateGame1(dt);
+    drawGame1();
+  } else if (STATE === 'g1clear'){
+    drawTransition('LEVEL CLEAR!', 'PERCY IS SAFE — NOW SURVIVE THE ICE MAZE');
+  } else if (STATE === 'g2'){
+    if (!paused) updateGame2(dt);
+    drawGame2();
+  } else if (STATE === 'g2clear'){
+    drawTransition('MAZE CLEARED!', 'BACK OUT ONTO THE ICE, EDDIE');
+  } else if (STATE === 'gameover'){
+    drawGameOver();
+  }
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
