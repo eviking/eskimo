@@ -52,27 +52,20 @@ const canvas = document.getElementById('c');
 const ctx = canvas.getContext('2d');
 ctx.imageSmoothingEnabled = false;
 
-// ---------- palette (classic 8-bit micro palette) ----------
+// ---------- palette ----------
+// Real Spectrum sprites are flat silhouettes: one or two solid "ink"
+// colors per character, no shading/gradients (an 8x8 attribute cell
+// can only hold one ink + one paper colour at a time).
 const PAL = {
   '.': null,
   'k': '#000000', // black
   'w': '#d7d7d7', // white
-  'W': '#ffffff', // bright white
+  'W': '#ffffff', // bright white (borders/highlights)
   'b': '#0000d7', // blue
-  'B': '#0000ff', // bright blue
-  'r': '#d70000', // red
-  'R': '#ff0000', // bright red
-  'm': '#d700d7', // magenta
-  'M': '#ff00ff', // bright magenta
-  'g': '#00d700', // green
-  'G': '#00ff00', // bright green
   'c': '#00d7d7', // cyan
-  'C': '#00ffff', // bright cyan
-  'y': '#d7d700', // yellow
-  'Y': '#ffff00', // bright yellow
-  'f': '#f0b088', // skin tone
-  'o': '#ff8800', // orange (beak/feet)
-  'n': '#7a5230', // brown (eyes/pupils reuse)
+  'o': '#ff8800', // orange (Percy's beak/feet)
+  'r': '#d70000', // red (Growler's mouth)
+  'Y': '#ffff00', // bright yellow (electrified wire)
 };
 
 const PX = 3;      // display pixels per sprite pixel
@@ -100,46 +93,45 @@ function drawSprite(rows, dx, dy, mirror){
 }
 
 // ---------- sprite data (16x16 pixel grids) ----------
+// Eddie: a flat white fur hood over a flat blue parka, black boots -
+// two solid inks plus outline, in the chunky-silhouette style of
+// mid-80s Spectrum arcade sprites (Miner Willy, Monty Mole, etc).
 const EDDIE_DOWN = [
 "................",
+"....wwwwwwww....",
+"...wwwwwwwwww...",
+"...wwkwwwwkww...",
+"...wwwwwwwwww...",
+"...wwwwwwwwww...",
+"....wwwwwwww....",
+"....bbbbbbbb....",
+"...bbbbbbbbbb...",
+"...bbbbbbbbbb...",
+"...bbbbbbbbbb...",
+"...bbbbbbbbbb...",
+"....bb....bb....",
+"....bb....bb....",
+"....kk....kk....",
 "................",
-"......WWWW......",
-".....WffffW.....",
-".....WfkfkfW....",
-".....WffffW.....",
-".....WWffWW.....",
-"....bbbBBBbbb...",
-"....bbBBBBBbb...",
-"..RbbBBBBBBbbR..",
-"..RRbBBBBBBbRR..",
-"....bbBBBBbb....",
-"....bb....bb....",
-"....bb....bb....",
-"....OO....OO....",
-"...OOO....OOO...",
 ];
 const EDDIE_UP = [
 "................",
+"....wwwwwwww....",
+"...wwwwwwwwww...",
+"...wwwwwwwwww...",
+"...wwwwwwwwww...",
+"...wwwwwwwwww...",
+"....wwwwwwww....",
+"....bbbbbbbb....",
+"...bbbbbbbbbb...",
+"...bbbbbbbbbb...",
+"...bbbbbbbbbb...",
+"...bbbbbbbbbb...",
+"....bb....bb....",
+"....bb....bb....",
+"....kk....kk....",
 "................",
-"......WWWW......",
-".....WWWWWW.....",
-".....WWWWWW.....",
-".....WWkkWW.....",
-".....WWffWW.....",
-"....bbbBBBbbb...",
-"....bbBBBBBbb...",
-"..RbbBBBBBBbbR..",
-"..RRbBBBBBBbRR..",
-"....bbBBBBbb....",
-"....bb....bb....",
-"....bb....bb....",
-"....OO....OO....",
-"...OOO....OOO...",
 ];
-// replace stray 'O' with orange key not in palette map above; use 'o'
-function fix(rows){ return rows.map(r => r.replace(/O/g,'o')); }
-const EDDIE_DOWN_F = fix(EDDIE_DOWN);
-const EDDIE_UP_F = fix(EDDIE_UP);
 
 const PERCY = [
 "................",
@@ -160,35 +152,34 @@ const PERCY = [
 "................",
 ];
 
-// Growler - a grumpy white sea-bear that swims across the water rows
+// Growler - a flat white sea-bear head, snarling, swimming across the water
 const GROWLER = [
 "................",
 "................",
 "....wwwwwwww....",
-"...wWWWWWWWWw...",
-"..wWWkWWWWkWWw..",
-"..wWWRWWWWRWWw..",
-".wWWWWWWWWWWWWw.",
-".wWkkkkkkkkkkWw.",
-".wWkWWWWWWWWkWw.",
-"..wWWWWWWWWWw...",
-"..wwwwwwwwwwww..",
+"...wwwwwwwwww...",
+"..wwwkwwwwkwww..",
+"..wwwrrrrrrwww..",
+"..wwwkkkkkkwww..",
+"...wwwwwwwwww...",
+"....wwwwwwww....",
+"....cccccccc....",
 "...cccccccccc...",
-"..cccccccccccc..",
-"...cc..cc..cc...",
+"................",
+"................",
+"................",
 "................",
 "................",
 ];
 
-// Snowbug - small maze pest
+// Snowbug - small flat maze pest, chunky insect silhouette
 const SNOWBUG = [
 "................",
 "................",
 "......cccc......",
-".....cCCCCc.....",
-"....cCkCCkCc....",
-"....cCCCCCCc....",
-".....cCCCCc.....",
+".....cccccc.....",
+"....ccckkccc....",
+"....cccccccc....",
 "....c.cccc.c....",
 "...c..cccc..c...",
 "..c...cccc...c..",
@@ -198,46 +189,37 @@ const SNOWBUG = [
 "................",
 "................",
 "................",
+"................",
 ];
 
-const ICE_BLOCK = [
-"WWWWWWWWWWWWWWWW",
-"WCCCCCCCCCCCCCCW",
-"WCwwwwwwwwwwwwCW",
-"WCwCCCCCCCCCCwCW",
-"WCwCwwwwwwwwCwCW",
-"WCwCwCCCCCCwCwCW",
-"WCwCwCwwwwCwCwCW",
-"WCwCwCwCCwCwCwCW",
-"WCwCwCwCCwCwCwCW",
-"WCwCwCwwwwCwCwCW",
-"WCwCwCCCCCCwCwCW",
-"WCwCwwwwwwwwCwCW",
-"WCwCCCCCCCCCCwCW",
-"WCCCCCCCCCCCCCCW",
-"WWWWWWWWWWWWWWWW",
-"kkkkkkkkkkkkkkkk",
-];
-const ICE_BLOCK_CRACK = ICE_BLOCK.map((r,i)=> i>3&&i<12 ? r.replace(/w/g,(m,idx)=> (idx%3===0?'k':m)) : r);
-
-const WALL = [
-"kkkkkkkkkkkkkkkk",
-"kbbbbbbbbbbbbbbk",
-"kbBBBBBBBBBBBBbk",
-"kbBkkkkkkkkkkBbk",
-"kbBkBBBBBBBBkBbk",
-"kbBkBkkkkkkBkBbk",
-"kbBkBkBBBBkBkBbk",
-"kbBkBkBkkBkBkBbk",
-"kbBkBkBkkBkBkBbk",
-"kbBkBkBBBBkBkBbk",
-"kbBkBkkkkkkBkBbk",
-"kbBkBBBBBBBBkBbk",
-"kbBkkkkkkkkkkBbk",
-"kbBBBBBBBBBBBBbk",
-"kbbbbbbbbbbbbbbk",
-"kkkkkkkkkkkkkkkk",
-];
+// Built procedurally (not hand-typed) so every row is guaranteed 16 wide -
+// a faceted ice cube for pushable blocks, and a distinct electrified
+// fence for the maze border, instead of two near-identical nested squares.
+function buildTile(painter){
+  const rows = [];
+  for (let r=0;r<16;r++){
+    let row = '';
+    for (let c=0;c<16;c++) row += painter(r,c);
+    rows.push(row);
+  }
+  return rows;
+}
+const ICE_BLOCK = buildTile((r,c)=>{
+  if (r===0||r===15||c===0||c===15) return 'W';
+  if (r===c || r===15-c) return 'w';
+  return 'c';
+});
+const ICE_BLOCK_CRACK = buildTile((r,c)=>{
+  if (r===0||r===15||c===0||c===15) return 'W';
+  if (Math.abs(r-c)<=1 || Math.abs(r+c-15)<=1) return 'k';
+  return 'c';
+});
+const WALL = buildTile((r,c)=>{
+  if (c<=1 || c>=14) return 'k';
+  if (r===4 || r===11) return 'Y';
+  if (r>5 && r<10 && (r+c)%3===0) return 'Y';
+  return 'b';
+});
 
 function tileWater(dx,dy,phase){
   ctx.fillStyle = '#0000d7';
@@ -251,11 +233,9 @@ function tileWater(dx,dy,phase){
 function tileFloe(dx,dy){
   ctx.fillStyle = '#00d7d7';
   ctx.fillRect(dx,dy,TILE,TILE);
-  ctx.fillStyle = '#00ffff';
-  ctx.fillRect(dx+PX,dy+PX,TILE-2*PX,TILE-2*PX);
   ctx.strokeStyle = '#0000d7';
-  ctx.lineWidth = 1;
-  ctx.strokeRect(dx+0.5,dy+0.5,TILE-1,TILE-1);
+  ctx.lineWidth = 2;
+  ctx.strokeRect(dx+1,dy+1,TILE-2,TILE-2);
 }
 function tileHole(dx,dy){
   tileFloe(dx,dy);
@@ -272,8 +252,9 @@ function tileHole(dx,dy){
 function tileBase(dx,dy){
   ctx.fillStyle = '#d7d700';
   ctx.fillRect(dx,dy,TILE,TILE);
-  ctx.fillStyle = '#ffff00';
-  ctx.fillRect(dx+PX,dy+PX,TILE-2*PX,TILE-2*PX);
+  ctx.strokeStyle = '#000000';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(dx+0.5,dy+0.5,TILE-1,TILE-1);
 }
 
 // ---------- audio (simple beeper-style FX) ----------
@@ -488,12 +469,12 @@ function drawGame1(){
     drawSprite(PERCY, g1.percyTx*TILE, g1.percyTy*TILE+HUD_H, false);
   }
   for (const gr of g1.growlers){
-    drawSprite(GROWLER, Math.round(gr.x*PX*16)/PX/16*0 + gr.x*TILE, gr.y*TILE+HUD_H, gr.dir<0);
+    drawSprite(GROWLER, gr.x*TILE, gr.y*TILE+HUD_H, gr.dir<0);
   }
   const e = g1.eddie;
   const flash = g1.hurtCooldown>0 && Math.floor(performance.now()/80)%2===0;
   if (!flash){
-    drawSprite(e.dir==='up'?EDDIE_UP_F:EDDIE_DOWN_F, e.px, e.py, e.dir==='left');
+    drawSprite(e.dir==='up'?EDDIE_UP:EDDIE_DOWN, e.px, e.py, e.dir==='left');
     if (e.carrying) drawSprite(PERCY, e.px, e.py - TILE*0.55, false);
   }
   drawHud('GAME 1: RESCUE PERCY', `RESCUES ${g1.rescues}/${g1.needed}`);
@@ -514,13 +495,13 @@ function initGame2(){
   // clear a starting pocket
   const clearCells = [[1,1],[2,1],[1,2]];
   for (const [x,y] of clearCells) grid[y][x] = 'empty';
-  const enemyCount = Math.min(2 + round, 6);
+  const enemyCount = Math.min(4 + (round-1), 7); // the original spawns four Snowbugs
   const bugs = [];
-  const spawns = [[COLS-2,ROWS-2],[COLS-2,1],[1,ROWS-2],[COLS-2,Math.floor(ROWS/2)],[Math.floor(COLS/2),1],[Math.floor(COLS/2),ROWS-2]];
+  const spawns = [[COLS-2,ROWS-2],[COLS-2,1],[1,ROWS-2],[COLS-2,Math.floor(ROWS/2)],[Math.floor(COLS/2),1],[Math.floor(COLS/2),ROWS-2],[1,Math.floor(ROWS/2)]];
   for (let i=0;i<enemyCount;i++){
     const [sx,sy] = spawns[i % spawns.length];
     grid[sy][sx] = 'empty';
-    bugs.push({ tx:sx, ty:sy, px:sx*TILE, py:sy*TILE+HUD_H, moving:false, dir:'down', moveT:0, speed: 3.0 + round*0.2 });
+    bugs.push({ tx:sx, ty:sy, px:sx*TILE, py:sy*TILE+HUD_H, moving:false, dir:'down', moveT:0, speed: 3.0 + round*0.2, dazed:false, dazeTimer:0 });
   }
   g2 = {
     grid,
@@ -577,9 +558,16 @@ function updateGame2(dt){
   // bugs
   for (const b of g2.bugs){
     if (b.dead) continue;
+    // the maze border is electrified: any Snowbug touching it is dazed
+    // and briefly vulnerable - Eddie can then finish it off just by touch
+    const touchingBorder = cellAt(b.tx-1,b.ty)==='wall' || cellAt(b.tx+1,b.ty)==='wall' ||
+                            cellAt(b.tx,b.ty-1)==='wall' || cellAt(b.tx,b.ty+1)==='wall';
+    if (touchingBorder){ b.dazed = true; b.dazeTimer = 3.0; }
+    else if (b.dazed){ b.dazeTimer -= dt; if (b.dazeTimer <= 0) b.dazed = false; }
+    const effSpeed = b.dazed ? b.speed * 0.15 : b.speed;
     if (!b.moving){
       b.moveT += dt;
-      if (b.moveT > 1/b.speed){
+      if (b.moveT > 1/effSpeed){
         b.moveT = 0;
         const dx = e.tx-b.tx, dy = e.ty-b.ty;
         const options = [];
@@ -609,10 +597,14 @@ function updateGame2(dt){
       b.py += Math.sign(ty-b.py)*Math.min(spd, Math.abs(ty-b.py));
       if (b.px===tx && b.py===ty) b.moving = false;
     }
-    if (g2.hurtCooldown<=0 && Math.round(b.px/TILE)===Math.round(e.px/TILE) && Math.round(b.py/TILE)===Math.round(e.py/TILE)){
-      g2.hurtCooldown = 1.0;
-      if (loseLife()){
-        e.tx=1; e.ty=1; e.px=TILE; e.py=TILE+HUD_H; e.moving=false;
+    if (b.tx===e.tx && b.ty===e.ty){
+      if (b.dazed){
+        b.dead = true; score += 60; SFX.crush();
+      } else if (g2.hurtCooldown<=0){
+        g2.hurtCooldown = 1.0;
+        if (loseLife()){
+          e.tx=1; e.ty=1; e.px=TILE; e.py=TILE+HUD_H; e.moving=false;
+        }
       }
     }
   }
@@ -639,10 +631,15 @@ function drawGame2(){
   for (const b of g2.bugs){
     if (b.dead) continue;
     drawSprite(SNOWBUG, b.px, b.py, b.dir==='left');
+    if (b.dazed && Math.floor(performance.now()/100)%2===0){
+      ctx.strokeStyle = '#ffff00';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(b.px+2, b.py+2, TILE-4, TILE-4);
+    }
   }
   const e = g2.eddie;
   const flash = g2.hurtCooldown>0 && Math.floor(performance.now()/80)%2===0;
-  if (!flash) drawSprite(e.dir==='up'?EDDIE_UP_F:EDDIE_DOWN_F, e.px, e.py, e.dir==='left');
+  if (!flash) drawSprite(e.dir==='up'?EDDIE_UP:EDDIE_DOWN, e.px, e.py, e.dir==='left');
   const remaining = g2.bugs.filter(b=>!b.dead).length;
   drawHud('GAME 2: ICE MAZE', `SNOWBUGS LEFT ${remaining}`);
 }
@@ -676,7 +673,7 @@ function drawMiniEddie(x,y){
   ctx.translate(x,y);
   ctx.scale(0.6,0.6);
   for (let r=0;r<16;r++){
-    const row = EDDIE_DOWN_F[r];
+    const row = EDDIE_DOWN[r];
     for (let c=0;c<16;c++){
       const col = PAL[row[c]];
       if (!col) continue;
@@ -704,7 +701,7 @@ function drawTitle(){
   ctx.fillRect(0,0,canvas.width,canvas.height);
   for (let x=0;x<COLS;x++) tileFloe(x*TILE, canvas.height-TILE);
 
-  drawSprite(EDDIE_DOWN_F, canvas.width/2 - TILE*2.2, canvas.height-TILE*2.15, false);
+  drawSprite(EDDIE_DOWN, canvas.width/2 - TILE*2.2, canvas.height-TILE*2.15, false);
   drawSprite(PERCY, canvas.width/2 - TILE*0.6, canvas.height-TILE*2.0, false);
   drawSprite(GROWLER, canvas.width/2 + TILE*0.9, canvas.height-TILE*2.15 + Math.sin(t*2)*4, false);
 
@@ -724,7 +721,7 @@ function drawTitle(){
 
   centerText('TWO GAMES IN ONE!', canvas.height*0.46, '#ffffff', 20);
   centerText('1: RESCUE PERCY FROM THE GROWLERS', canvas.height*0.53, '#ffff00', 14);
-  centerText('2: CLEAR THE SNOWBUGS FROM THE ICE MAZE', canvas.height*0.58, '#ffff00', 14);
+  centerText('2: PUSH ICE BLOCKS TO CRUSH THE SNOWBUGS', canvas.height*0.58, '#ffff00', 14);
 
   if (Math.floor(t*2)%2===0){
     centerText('PRESS ENTER TO START', canvas.height*0.68, '#00ff00', 22);
